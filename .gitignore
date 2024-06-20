@@ -1,0 +1,7 @@
+node_modules
+*.json
+.vscode
+artifacts
+swarm
+.deps
+.env
