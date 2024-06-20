@@ -25,7 +25,7 @@ module.exports = {
        provider: () => new HDWalletProvider(
        {
          privateKeys:[process.env.privateKey],
-         providerOrUrl: 'https://mainnet.infura.io/v3/'+process.env.infuraApikey,
+         providerOrUrl: 'https://rpc.ankr.com/eth_sepolia',
          pollingInterval: 30000
        }),
        network_id: 11155111,
@@ -44,7 +44,7 @@ module.exports = {
 
   compilers: {
     solc: {
-      version: "0.8.20",
+      version: "0.8.26",
       settings: {
         optimizer: {
           enabled: true,

@@ -1,4 +1,4 @@
-pragma solidity 0.8.20;
+pragma solidity ^0.8.0;
 
 // sepolia 0x4eFB56aC5af292D6898cab193EED53a1328D2F5B
 // SPDX-License-Identifier: MIT
@@ -1063,5 +1063,3 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
         _burn(tokenId);
     }
 }
-
-// sepolia: 0xd3987e45c38e10E5D4da942a19BEB8CDF48bE078

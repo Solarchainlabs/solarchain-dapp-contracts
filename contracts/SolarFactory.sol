@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.0;
 
+interface ISolarERC1155{
+    function initialize(string memory name_, string memory symbol_, string memory bURI, address[] memory dappAddress) external;
+    function transferOwnership(address newOwner) external;
+}
 interface IExchangeV2{
     function __ExchangeV2_init(
         address _transferProxy,
@@ -9,7 +13,6 @@ interface IExchangeV2{
     ) external;
     function transferOwnership(address newOwner) external;
 }
-
 
 library EnumerableSet {
    
@@ -296,17 +299,21 @@ abstract contract Ownable is Context {
     }
 }
 
-contract ExchangeFactory is Ownable {
+contract SolarFactory is Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    address public erc1155Implementation;
     address public exchangeV2Implementation;
+
     EnumerableSet.AddressSet private _dappSet;
     address constant TBA_MULTICALL_ADDRESS = 0xcA1167915584462449EE5b4Ea51c37fE81eCDCCD;
 
+    event CreateERC1155(address indexed contractAddress);
     event CreateExchangeV2(address indexed contractAddress);
 
-    constructor(address exchangeV2) {
-        exchangeV2Implementation = exchangeV2;
+    constructor(address solarERC1155, address solarExchange) {
+        erc1155Implementation = solarERC1155;
+        exchangeV2Implementation = solarExchange;
     }
 
     function setDappAddress(address addr, bool enable) external onlyOwner {
@@ -322,6 +329,27 @@ contract ExchangeFactory is Ownable {
         for(uint i=0;i<_dappSet.length();++i){
             addrs[i]=_dappSet.at(i);
         }
+    }
+
+    function createERC1155(
+        string memory name_,
+        string memory symbol_,
+        string memory bURI_
+    ) external returns(address)  {
+         if(isContract(_msgSender())){            
+            require(msg.data.length >= 20, "Invalid data length");
+            address originalSender = address(bytes20(msg.data[msg.data.length - 20:]));
+            require(_dappSet.contains(originalSender) && TBA_MULTICALL_ADDRESS==_msgSender(), "!owner");
+            
+        }else{
+            require(tx.origin==owner(), "!owner");
+        }
+        
+        address clonedContract = Clones.clone(erc1155Implementation);
+        ISolarERC1155(clonedContract).initialize(name_, symbol_, bURI_, getDappAddress());
+        ISolarERC1155(clonedContract).transferOwnership(owner());
+        emit CreateERC1155(clonedContract);
+        return clonedContract;
     }
 
     function createExchangeV2(
@@ -344,7 +372,11 @@ contract ExchangeFactory is Ownable {
         return clonedContract;
     }
 
-    function changeImplementation(address newImplementationAddress) external onlyOwner {
+    function changeERC1155Implementation(address newImplementationAddress) external onlyOwner {
+        erc1155Implementation = newImplementationAddress;
+    }    
+
+    function changeExchangeV2Implementation(address newImplementationAddress) external onlyOwner {
         exchangeV2Implementation = newImplementationAddress;
     }    
 
