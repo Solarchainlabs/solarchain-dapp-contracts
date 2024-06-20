@@ -6,7 +6,7 @@ Implement project management and project invest and claim
 yarn add -g truffle 
 yarn add dotenv
 yarn add @truffle/hdwallet-provider@2.1.15 -D
-yarn add @truffle/hdwallet-provider@0.6.7 -D
+yarn add truffle-plugin-verify@0.6.7 -D
 ```
 
 ## compile contract
