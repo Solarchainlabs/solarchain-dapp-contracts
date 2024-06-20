@@ -21,7 +21,7 @@ truffle compile
 2. NftTransferProxy
 3. SolarTbaNft
 4. SolarERC1155
-5. Build https://github.com/Solarchainlabs/solarchain-exchange/projects/exchangev2/contract/SolarExchangeV2.sol，deploy it
+5. Build [SolarExchangeV2.sol](https://github.com/Solarchainlabs/solarchain-exchange/projects/exchangev2/contract/SolarExchangeV2.sol)，deploy it
 6. SolarFactory
 7. SolarDappV2
 8. Call SolarFactory, SolarTbaNft, Erc20TransferProxy's function setDappAddress()， set SolarDappV2's address into it
