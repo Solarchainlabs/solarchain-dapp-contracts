@@ -388,9 +388,9 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         IMulticall3(MULTI_CALL_3).aggregate3(call3);
     }
 
-    function _mintBatch(address erc1155Address, address to, uint256[] memory ids, uint256[] memory amounts) internal{
+    function _mintBatch(address erc1155Address, address to, uint256 maxId, uint256 amount) internal{
         IMulticall3.Call3[] memory call3=new IMulticall3.Call3[](1);
-        bytes memory callData = abi.encodeWithSelector(0x1f7fdffa, to, ids, amounts, bytes("")); // "mintBatch(address,uint256[],uint256[],bytes)": "1f7fdffa",
+        bytes memory callData = abi.encodeWithSelector(0x2e81aaea, to, maxId, amount); // "mintBatch(address,uint256,uint256)": "2e81aaea",
         call3[0]=IMulticall3.Call3(erc1155Address, false, callData);        
         IMulticall3.Result[] memory result = IMulticall3(MULTI_CALL_3).aggregate3(call3);
         require(result[0].success, "Call ERC1155.mintBatch() failed");
@@ -417,13 +417,6 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         project.soldAmount += amount;
         IERC20TransferProxy(_erc20TransferProxy).erc20safeTransferFrom(IERC20Upgradeable(_paymentTokenAddress), msg.sender, address(this), amount);
 
-        // mint
-        uint[] memory ids = new uint[](project.period);
-        uint[] memory amounts = new uint[](project.period);
-        for(uint i=0;i<project.period;++i){
-            ids[i]=i+1;
-            amounts[i]=nftValue;
-        }
         
         // update invest amount
         uint investIndex = _userInvestList[msg.sender].length;    
@@ -431,10 +424,10 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         if(investIndex==0){
             _userList.push(msg.sender);
             tbaAddress = _createTBA(msg.sender, _userList.length-1 + _tbaNftIdStartFrom); // nftId == user address index+1
-            _mintBatch(project.contractAddress, tbaAddress, ids, amounts);
+            _mintBatch(project.contractAddress, tbaAddress, project.period, nftValue);
         }else{
             (, tbaAddress) = getUserTBA(msg.sender);
-            _mintBatch(project.contractAddress, tbaAddress, ids, amounts);
+            _mintBatch(project.contractAddress, tbaAddress, project.period, nftValue);
             for(uint i=0;i<investIndex;++i){
                 Invest storage _invest = _userInvestList[msg.sender][i];
                 if(_invest.amount>0 && _invest.projectIndex == projectIndex){
@@ -482,17 +475,11 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         }
     }
 
-    function claim(address nftContractAddress, uint[] calldata nftIds, uint[] calldata nftValues, bool withTBA) external returns(uint totalClaimableAmount){ 
+    function _claim(address account, address nftContractAddress, uint[] calldata nftIds, uint[] calldata nftValues) internal returns(uint totalClaimableAmount){ 
         (uint projectIndex, Project memory project) = getProjectInfo(nftContractAddress);
-        address account;
-        if(!withTBA) account = msg.sender;
-        else{
-            (uint tbaNftId, address tbaAddress) = getUserTBA(msg.sender);
-            require(IERC721(_tbaNftAddress).ownerOf(tbaNftId)==msg.sender, "TBA bind NFT is not owner of you!");
-            account = tbaAddress;
-        }
         require(project.rewardStartTime<block.timestamp, "!reward start time");
         uint months = monthsBetween(project.rewardStartTime, block.timestamp);
+
         uint nftId;
         uint nftValue;
         for(uint i=0; i < nftIds.length; ++i){
@@ -500,16 +487,28 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
             nftValue = nftValues[i];
             require(nftId<=months, "!claim start time");
             require(IERC1155(nftContractAddress).balanceOf(account,nftId)>=nftValue, "invalid nftValue");
-           
+        
             uint reward = project.minMonthReward*nftValue;  
             totalClaimableAmount += reward;  
             if(reward>0){
-                emit ClaimReward(msg.sender, projectIndex, project.contractAddress, nftId, nftValue, reward);
+                emit ClaimReward(account, projectIndex, project.contractAddress, nftId, nftValue, reward);
             }
+        }
+        _burnBatch(nftContractAddress, account, nftIds, nftValues);
+    }
+
+    function claim(address nftContractAddress, uint[] calldata eoaNftIds, uint[] calldata eoaNftValues, uint[] calldata tbaNftIds, uint[] calldata tbaNftValues) external returns(uint totalClaimableAmount){ 
+        
+        if(eoaNftIds.length>0){
+            totalClaimableAmount += _claim(msg.sender, nftContractAddress, eoaNftIds, eoaNftValues);
+        }
+        if(tbaNftIds.length>0){
+            (uint tbaNftId, address tbaAddress) = getUserTBA(msg.sender);
+            require(IERC721(_tbaNftAddress).ownerOf(tbaNftId)==msg.sender, "TBA bind NFT is not owner of you!");
+            totalClaimableAmount += _claim(tbaAddress, nftContractAddress, tbaNftIds, tbaNftValues);
         }
         require(totalClaimableAmount>0, "Claimable amount is 0");
 
-        _burnBatch(nftContractAddress, account, nftIds, nftValues);
         IERC20(_paymentTokenAddress).transfer(msg.sender, totalClaimableAmount);  
     }
 
