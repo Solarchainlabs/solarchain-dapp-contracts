@@ -30,7 +30,7 @@ truffle compile
 11. Call SolarFactory.setDappAddress(), set NftTransferProxy's address into it
 ```
 # before run bellow command, add the privateKey, bscscanApikey, etherscanApikey, infuraApikey to the .env
-truffle migrate --network bsctest  --compile-none # --verbose-rpc
+truffle migrate --network ethtest  --compile-none # --verbose-rpc
 ```
 ## sepolia testnet contract address
 
