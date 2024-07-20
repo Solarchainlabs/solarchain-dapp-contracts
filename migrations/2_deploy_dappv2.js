@@ -16,7 +16,7 @@ module.exports = async function (deployer, network) {
         paymentTokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
     }
     try {
-        await deployer.deploy(SolarDappV2, paymentTokenAddress, SolarTbaNft, SolarFactory, ERC20TransferProxy, 1000);
+        await deployer.deploy(SolarDappV2, paymentTokenAddress, SolarTbaNft, SolarFactory, ERC20TransferProxy, 10000);
     } catch (err) {
         console.error(`Migration script encountered an error:\n${err.stack}`);
         // throw err;

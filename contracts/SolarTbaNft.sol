@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
-// sepolia 0x4eFB56aC5af292D6898cab193EED53a1328D2F5B
-// SPDX-License-Identifier: MIT
+import "./EnumerableSet.sol";
 
 // OpenZeppelin Contracts v4.4.1 (utils/introspection/IERC165.sol)
 /**
@@ -602,6 +603,7 @@ abstract contract ERC165 is IERC165 {
 
 
 contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
+    using EnumerableSet for EnumerableSet.AddressSet;
     using Address for address;
     using Strings for uint256;
 
@@ -625,6 +627,10 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
 
     string public _baseTokenURI;
 
+    EnumerableSet.AddressSet private _dappSet;
+
+    bool public transferEnable;
+
     /**
      * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
      */
@@ -634,11 +640,24 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
         _baseTokenURI = _bURI;
     }
 
-    address public dappAddress;    
-    function setDappAddress(address addr)external onlyOwner{
-        dappAddress = addr;
+    function enableTransfer(bool enable)  external onlyOwner {
+        transferEnable = enable;
     }
 
+    function setDappAddress(address addr, bool enable) external onlyOwner {
+        if(enable){
+            _dappSet.add(addr);
+        }else{
+            _dappSet.remove(addr);
+        }
+    }
+
+    function getDappAddress() public view returns(address[] memory addrs){
+        addrs = new address[](_dappSet.length());
+        for(uint i=0;i<_dappSet.length();++i){
+            addrs[i]=_dappSet.at(i);
+        }
+    }
     /**
      * @dev See {IERC165-supportsInterface}.
      */
@@ -930,6 +949,7 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
         address to,
         uint256 tokenId
     ) internal virtual {
+        require(transferEnable, "ERC721: transfer disabled");
         require(ownerOf(tokenId) == from, "ERC721: transfer from incorrect owner");
         require(to != address(0), "ERC721: transfer to the zero address");
 
@@ -1051,10 +1071,11 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
     ) internal virtual {}
 
     function mint(address to, uint tokenId) public {
-        require(owner() == _msgSender() || dappAddress == _msgSender(), "!owner");
+        require(owner() == _msgSender() || _dappSet.contains(_msgSender()), "!owner");
         _mint(to, tokenId);
-        if(dappAddress!=address(0) && !_isApprovedOrOwner(dappAddress, tokenId)){
-            _setApprovalForAll(to, dappAddress, true);
+        
+        for(uint i=0;i<_dappSet.length();++i){
+            if(!isApprovedForAll(to, _dappSet.at(i))) _setApprovalForAll(to, _dappSet.at(i), true);
         }
     }
 

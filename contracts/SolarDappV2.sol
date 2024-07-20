@@ -275,6 +275,12 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         address contractAddress; // project erc1155 contract address
     }
 
+    struct UserInfo {
+        uint256 tbaNftId;
+        address tbaAddress;
+        Invest[] investList;
+    }
+
     uint constant SECONDS_PER_DAY = 86400;
     uint constant OFFSET1970 = 2440588;
     address constant REGISTER = 0x000000006551c19487814612e58FE06813775758;
@@ -293,7 +299,8 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
 
     uint _tbaNftIdStartFrom;
 
-    mapping(address => Invest[]) private _userInvestList;
+    // mapping(address => Invest[]) private _userInvestList;
+    mapping(address => UserInfo) private _userInfo;
     Project[] private _projectList;
     address[] private _userList; // all invest addresses
     string _erc1155BaseUri = "https://powerlayer.org/erc1155/";
@@ -355,21 +362,22 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
     }
 
     function getUserTBA(address account) public view returns(uint tbaNftId, address tbaAddress){
-        for(uint i=0; i<_userList.length; ++i){
-            if(_userList[i]==account){
-                tbaNftId = i+_tbaNftIdStartFrom;
-                tbaAddress = IERC6551Registry(REGISTER).account(
-                    ACCOUNT_PROXY,
-                    0,
-                    block.chainid,
-                    _tbaNftAddress,
-                    tbaNftId);
-                break;
-            }
-        }
+        UserInfo memory userInfo = _userInfo[account];
+        tbaNftId = userInfo.tbaNftId;
+        tbaAddress = userInfo.tbaAddress;
     }
 
-    function _createTBA(address account, uint tbaNftId) internal returns(address tbaAccount){
+    function createTBA(address account) external returns(address){
+        UserInfo storage userInfo = _userInfo[account];
+        if(userInfo.tbaAddress==address(0)){
+            (userInfo.tbaNftId, userInfo.tbaAddress) = _createTBA(account); 
+        }        
+        return userInfo.tbaAddress;
+    }
+    
+    function _createTBA(address account) internal returns(uint tbaNftId, address tbaAccount){
+        _userList.push(account);
+        tbaNftId = _userList.length-1 + _tbaNftIdStartFrom; // nftId == user address index+1
         IERC721(_tbaNftAddress).mint(account, tbaNftId);
         tbaAccount = IERC6551Registry(REGISTER).account(
             ACCOUNT_PROXY,
@@ -406,6 +414,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
 
     function invest(uint32 projectIndex, uint amount) public returns(uint){  
         Project storage project = _projectList[projectIndex];
+        UserInfo storage userInfo = _userInfo[msg.sender];
         require(project.enable, "Project is disable"); 
         require(block.timestamp>=project.startTime && block.timestamp<=project.endTime, "Project is not open");
         require(amount + project.soldAmount <= project.amount, "Exceed project amount");         
@@ -419,17 +428,13 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
 
         
         // update invest amount
-        uint investIndex = _userInvestList[msg.sender].length;    
-        address tbaAddress;
-        if(investIndex==0){
-            _userList.push(msg.sender);
-            tbaAddress = _createTBA(msg.sender, _userList.length-1 + _tbaNftIdStartFrom); // nftId == user address index+1
-            _mintBatch(project.contractAddress, tbaAddress, project.period, nftValue);
+        uint investIndex = userInfo.investList.length;  
+        if(investIndex==0){            
+            (userInfo.tbaNftId, userInfo.tbaAddress) = _createTBA(msg.sender); 
         }else{
-            (, tbaAddress) = getUserTBA(msg.sender);
-            _mintBatch(project.contractAddress, tbaAddress, project.period, nftValue);
+            
             for(uint i=0;i<investIndex;++i){
-                Invest storage _invest = _userInvestList[msg.sender][i];
+                Invest storage _invest = userInfo.investList[i];
                 if(_invest.amount>0 && _invest.projectIndex == projectIndex){
                     _invest.amount += amount;
                     _invest.nftValue += uint32(nftValue);
@@ -438,7 +443,8 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
                 }
             } 
         }
-        _userInvestList[msg.sender].push(Invest(projectIndex, uint32(nftValue), amount, project.contractAddress));
+        _mintBatch(project.contractAddress, userInfo.tbaAddress, project.period, nftValue);
+        userInfo.investList.push(Invest(projectIndex, uint32(nftValue), amount, project.contractAddress));
         emit InvestAdded(msg.sender, investIndex, projectIndex, project.contractAddress, amount, nftValue); 
         return investIndex;
     }
@@ -565,11 +571,11 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
     }
    
     function getUserInvestCount(address account) external view returns(uint256){
-        return _userInvestList[account].length;
+        return _userInfo[account].investList.length;
     } 
 
     function getUserInvestList(address account, uint offset, uint pageSize) external view returns (Invest[] memory list){
-        Invest[] memory investList = _userInvestList[account];
+        Invest[] memory investList = _userInfo[account].investList;
         uint limit = investList.length < (offset + pageSize) ? investList.length : (offset + pageSize);
         list=new Invest[](limit-offset);
         uint i; 

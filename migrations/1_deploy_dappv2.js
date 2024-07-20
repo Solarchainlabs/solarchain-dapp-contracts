@@ -13,7 +13,7 @@ module.exports = async function (deployer, network) {
         exchangeV2Address = "0x73315cfE42437063d2a71fEeF9BDd95A64f1309A";
     }else if(network == "ethtest"){
         paymentTokenAddress = "0xBeb74A4dE492c5d64cB90Ce2c68b18661606C380";
-        exchangeV2Address = "0xcc2900dc89e85489958db2ca826ee8e487fb526c";
+        exchangeV2Address = "0xCe42993599260670124f116B96747ED7980F6551";
     }else if(network == "eth"){
         paymentTokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
     }

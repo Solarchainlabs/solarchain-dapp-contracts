@@ -32,3 +32,15 @@ truffle compile
 # before run bellow command, add the privateKey, bscscanApikey, etherscanApikey, infuraApikey to the .env
 truffle migrate --network bsctest  --compile-none # --verbose-rpc
 ```
+## sepolia testnet contract address
+
+```
+NftTransferProxy: 0x010E726F3e10805ae315Fd819878E717a3840277
+ERC20TransferProxy: 0x5ed86E347653310e2dBF1002001FdCECacE650F0 
+SolarTbaNft: 0xb9dc61A6d05CA7E6edF47DA9289cFE6dF06cC912
+SolarERC1155: 0x28AF06c355FE924D7484da1adf295744942bDE1F
+SolarFactory: 0x640235afa022D4CA5Ea85DBa438D22985925d49F
+SolarDappV2: 0xCe42993599260670124f116B96747ED7980F6551
+SolarExchangeV2-imp: 0x006Bd1A53fc5BB96AB9d3436838b86Ff6C6811e5
+SolarExchangeV2: 0x49E54c6b94214e0668C7EA22555BAC78376E4C59
+```
