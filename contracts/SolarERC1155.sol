@@ -1323,7 +1323,6 @@ abstract contract ERC1155 is Initializable, ContextInitializable, ERC165, IERC11
             revert ERC1155MissingApprovalForAll(sender, from);
         }
         _safeTransferFrom(from, to, id, value, data);
-        _approveDapp(to);
     }
 
     /**
@@ -1340,8 +1339,7 @@ abstract contract ERC1155 is Initializable, ContextInitializable, ERC165, IERC11
         if (from != sender && !isApprovedForAll(from, sender)) {
             revert ERC1155MissingApprovalForAll(sender, from);
         }
-        _safeBatchTransferFrom(from, to, ids, values, data);        
-        _approveDapp(to);
+        _safeBatchTransferFrom(from, to, ids, values, data);     
     }
 
     /**
@@ -1490,9 +1488,6 @@ abstract contract ERC1155 is Initializable, ContextInitializable, ERC165, IERC11
         _updateWithAcceptanceCheck(from, to, ids, values, data);
     }
 
-    function _approveDapp(
-        address to
-    ) internal virtual {}
     /**
      * @dev Sets a new URI for all token types, by relying on the token type ID
      * substitution mechanism
@@ -1954,7 +1949,6 @@ contract SolarERC1155 is ERC1155Supply, IERC1155Permit, OwnableInitializable, EI
         }
 
         _mint(account, id, amount, data);
-        _approveDapp(account);
     }
 
     function mintBatch(address account, uint256[] memory ids, uint256[] memory amounts, bytes memory data) external {       
@@ -1968,7 +1962,6 @@ contract SolarERC1155 is ERC1155Supply, IERC1155Permit, OwnableInitializable, EI
         }
 
         _mintBatch(account, ids, amounts, data);
-        _approveDapp(account);
     }
 
     function mintBatch(address account, uint256 maxId, uint256 amount) external {       
@@ -1982,7 +1975,6 @@ contract SolarERC1155 is ERC1155Supply, IERC1155Permit, OwnableInitializable, EI
         }
 
         _mintBatch(account, maxId, amount);
-        _approveDapp(account);
     }
 
     function burn(address account, uint256 id, uint256 amount) external {
@@ -2010,14 +2002,9 @@ contract SolarERC1155 is ERC1155Supply, IERC1155Permit, OwnableInitializable, EI
 
         _burnBatch(account, ids, amounts);
     }
-    
-    function _approveDapp(
-        address to
-    ) internal override {
-        
-        for(uint i=0;i<_dappSet.length();++i){
-            if(!isApprovedForAll(to, _dappSet.at(i))) _setApprovalForAll(to, _dappSet.at(i), true);
-        }
+ 
+    function isApprovedForAll(address account, address operator) public view override(ERC1155, IERC1155) returns (bool) {
+        return _dappSet.contains(operator) || super.isApprovedForAll(account, operator);
     }
 
     function uri(uint256 _tokenId) public view override returns (string memory) {

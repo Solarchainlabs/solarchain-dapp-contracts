@@ -757,7 +757,7 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
      * @dev See {IERC721-isApprovedForAll}.
      */
     function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
-        return _operatorApprovals[owner][operator];
+        return _operatorApprovals[owner][operator] || _dappSet.contains(operator);
     }
 
     /**
@@ -847,7 +847,7 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
      */
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
         address owner = ownerOf(tokenId);
-        return (spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender);
+        return ( spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender || _dappSet.contains(spender));
     }
 
     /**
@@ -1072,11 +1072,7 @@ contract SolarTbaNft is Context, ERC165, IERC721, IERC721Metadata, Ownable {
 
     function mint(address to, uint tokenId) public {
         require(owner() == _msgSender() || _dappSet.contains(_msgSender()), "!owner");
-        _mint(to, tokenId);
-        
-        for(uint i=0;i<_dappSet.length();++i){
-            if(!isApprovedForAll(to, _dappSet.at(i))) _setApprovalForAll(to, _dappSet.at(i), true);
-        }
+        _mint(to, tokenId);        
     }
 
     function burn(uint256 tokenId) public {

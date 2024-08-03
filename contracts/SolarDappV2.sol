@@ -2,6 +2,8 @@
 
 pragma solidity ^0.8.0;
 
+import "./EnumerableSet.sol";
+
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
@@ -249,6 +251,7 @@ abstract contract Ownable is Context {
 }
 
 contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
+    using EnumerableSet for EnumerableSet.AddressSet;
     
     event ProjectAdded(uint256 indexed projectIndex, address contractAddress);
     event ProjectUpdated(uint256 indexed projectIndex, address contractAddress);
@@ -303,6 +306,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
     mapping(address => UserInfo) private _userInfo;
     Project[] private _projectList;
     address[] private _userList; // all invest addresses
+    EnumerableSet.AddressSet private _operatorSet; // allow to change project info
     string _erc1155BaseUri = "https://powerlayer.org/erc1155/";
 
     constructor(address paymentTokenAddress, address tbaNftAddress, address erc1155FactoryAddress, address erc20TransferProxy, uint tbaNftIdStartFrom) {
@@ -311,6 +315,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         _erc1155FactoryAddress = erc1155FactoryAddress;
         _erc20TransferProxy = erc20TransferProxy;
         _tbaNftIdStartFrom = tbaNftIdStartFrom;
+        _operatorSet.add(msg.sender);
     }
 
     function getAllParam() external view returns(address paymentTokenAddress, address tbaNftAddress, address erc1155FactoryAddress, address erc20TransferProxy, uint tbaNftIdStartFrom,  string memory erc1155BaseUri){
@@ -325,20 +330,22 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
     function _createERC1155(string calldata name, string calldata symbol) internal returns(address contractAddress){
         IMulticall3.Call3[] memory call3=new IMulticall3.Call3[](1);
         bytes memory callData = abi.encodeWithSignature("createERC1155(string,string,string)",name,symbol,_erc1155BaseUri);
-        call3[0]=IMulticall3.Call3(_erc1155FactoryAddress, false, callData);        // 低级调用
+        call3[0]=IMulticall3.Call3(_erc1155FactoryAddress, false, callData);        
         IMulticall3.Result[] memory result = IMulticall3(MULTI_CALL_3).aggregate3(call3);
         require(result[0].success, "Call factory.createERC1155() failed");
         contractAddress = abi.decode(result[0].returnData, (address));
     }
 
-    function addProject(uint256 minMonthReward, uint16 period, uint32 startTime, uint32 endTime, uint32 rewardStartTime, uint256 amount, uint256 minInvestAmount, string calldata name, string calldata symbol) public onlyOwner{
+    function addProject(uint256 minMonthReward, uint16 period, uint32 startTime, uint32 endTime, uint32 rewardStartTime, uint256 amount, uint256 minInvestAmount, string calldata name, string calldata symbol) public{
+        require(_operatorSet.contains(msg.sender), "!allowed");
         uint projectIndex = _projectList.length;      
         address contractAddress = _createERC1155(name, symbol);  
         _projectList.push(Project(true, period, startTime, endTime, rewardStartTime, amount, minInvestAmount, minMonthReward, 0, contractAddress));
         emit ProjectAdded(projectIndex, contractAddress);
     }
 
-    function updateProject(uint projectIndex, bool enable, uint256 minMonthReward, uint16 period, uint32 startTime, uint32 endTime, uint32 rewardStartTime, uint256 amount, uint256 minInvestAmount) external onlyOwner{
+    function updateProject(uint projectIndex, bool enable, uint256 minMonthReward, uint16 period, uint32 startTime, uint32 endTime, uint32 rewardStartTime, uint256 amount, uint256 minInvestAmount) external{
+        require(_operatorSet.contains(msg.sender), "!allowed");
         Project storage project = _projectList[projectIndex];
         if(enable!=project.enable) project.enable = enable;
         if(minMonthReward!=project.minMonthReward) project.minMonthReward = minMonthReward;
@@ -368,14 +375,15 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
     }
 
     function createTBA(address account) external returns(address){
-        UserInfo storage userInfo = _userInfo[account];
-        if(userInfo.tbaAddress==address(0)){
-            (userInfo.tbaNftId, userInfo.tbaAddress) = _createTBA(account); 
-        }        
-        return userInfo.tbaAddress;
+        (, address tbaAddress) = _createTBA(account); 
+        return tbaAddress;
     }
     
     function _createTBA(address account) internal returns(uint tbaNftId, address tbaAccount){
+        UserInfo storage userInfo = _userInfo[account];
+        if(userInfo.tbaAddress!=address(0)){
+            return (userInfo.tbaNftId ,  userInfo.tbaAddress);
+        }  
         _userList.push(account);
         tbaNftId = _userList.length-1 + _tbaNftIdStartFrom; // nftId == user address index+1
         IERC721(_tbaNftAddress).mint(account, tbaNftId);
@@ -429,7 +437,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         
         // update invest amount
         uint investIndex = userInfo.investList.length;  
-        if(investIndex==0){            
+        if(investIndex==0){   
             (userInfo.tbaNftId, userInfo.tbaAddress) = _createTBA(msg.sender); 
         }else{
             
@@ -438,6 +446,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
                 if(_invest.amount>0 && _invest.projectIndex == projectIndex){
                     _invest.amount += amount;
                     _invest.nftValue += uint32(nftValue);
+                    _mintBatch(project.contractAddress, userInfo.tbaAddress, project.period, nftValue);
                     emit InvestAdded(msg.sender, i, projectIndex, project.contractAddress, amount, nftValue);
                     return i;
                 }
@@ -531,6 +540,10 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         }
     }
 
+    function releaseEth(uint256 amount) external {
+        payable(owner()).transfer(amount);
+    }
+
     function releaseERC20Token(address token, uint256 amount) external {
         IERC20(token).transfer(owner(), amount);
     }
@@ -555,7 +568,6 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         _erc1155BaseUri = uri;
     }
 
-    // 参与地址数
     function getUserCount() external view returns(uint256){
         return _userList.length;
     } 
@@ -625,6 +637,21 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         (uint256 toYear, uint256 toMonth) = getYearAndMonth(toTimestamp);
 
         return (toYear - fromYear) * 12 + toMonth - fromMonth;
+    }
+    
+    function setOperatorAddress(address addr, bool enable) external onlyOwner {
+        if(enable){
+            _operatorSet.add(addr);
+        }else{
+            _operatorSet.remove(addr);
+        }
+    }
+
+    function getOperatorAddress() public view returns(address[] memory addrs){
+        addrs = new address[](_operatorSet.length());
+        for(uint i=0;i<_operatorSet.length();++i){
+            addrs[i]=_operatorSet.at(i);
+        }
     }
     
 }
