@@ -15,7 +15,10 @@ module.exports = async function (deployer, network) {
         paymentTokenAddress = "0xBeb74A4dE492c5d64cB90Ce2c68b18661606C380";
         exchangeV2Address = "0xCe42993599260670124f116B96747ED7980F6551";
     }else if(network == "eth"){
-        paymentTokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        paymentTokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+    }else if(network == "base"){
+        paymentTokenAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+        exchangeV2Address = "0x8d58F3D13784895D9480d3dFbfE7a2354C386C5b"; // USDC
     }
     try {
         await deployer.deploy(ERC20TransferProxy);
