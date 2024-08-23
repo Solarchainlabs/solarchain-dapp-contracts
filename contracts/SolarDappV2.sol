@@ -12,7 +12,8 @@ interface IERC20 {
         address from,
         address to,
         uint256 amount
-    ) external returns (bool);    
+    ) external returns (bool);   
+    function decimals() external view returns (uint256); 
 }
 
 interface IERC20Upgradeable {
@@ -393,7 +394,9 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
             block.chainid,
             _tbaNftAddress,
             tbaNftId);
-
+        userInfo.tbaNftId = tbaNftId;
+        userInfo.tbaAddress = tbaAccount;
+        
         // build call data
         IMulticall3.Call3[] memory call3=new IMulticall3.Call3[](2);
         bytes memory callData =  abi.encodeWithSignature("createAccount(address,bytes32,uint256,address,uint256)", ACCOUNT_PROXY, 0, block.chainid, _tbaNftAddress, tbaNftId);
@@ -426,10 +429,9 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         require(project.enable, "Project is disable"); 
         require(block.timestamp>=project.startTime && block.timestamp<=project.endTime, "Project is not open");
         require(amount + project.soldAmount <= project.amount, "Exceed project amount");         
-           
-        uint nftValue = amount/project.minInvestAmount;
+        require(amount >= project.minInvestAmount && (amount % project.minInvestAmount == 0), "Invalid amount");  
 
-        require(amount == nftValue * project.minInvestAmount, "Invalid amount");  
+        uint nftValue = (amount/project.minInvestAmount)*(project.minMonthReward/10**IERC20(_paymentTokenAddress).decimals());        
         
         project.soldAmount += amount;
         IERC20TransferProxy(_erc20TransferProxy).erc20safeTransferFrom(IERC20Upgradeable(_paymentTokenAddress), msg.sender, address(this), amount);
@@ -490,7 +492,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         }
     }
 
-    function _claim(address account, address nftContractAddress, uint[] calldata nftIds, uint[] calldata nftValues) internal returns(uint totalClaimableAmount){ 
+    function _claim(address account, address nftContractAddress, uint[] calldata nftIds, uint[] calldata nftValues) internal returns(uint totalClaimableNftValue){ 
         (uint projectIndex, Project memory project) = getProjectInfo(nftContractAddress);
         require(project.rewardStartTime<block.timestamp, "!reward start time");
         uint months = monthsBetween(project.rewardStartTime, block.timestamp);
@@ -501,12 +503,11 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
             nftId = nftIds[i];
             nftValue = nftValues[i];
             require(nftId<=months, "!claim start time");
-            require(IERC1155(nftContractAddress).balanceOf(account,nftId)>=nftValue, "invalid nftValue");
+            require(IERC1155(nftContractAddress).balanceOf(account, nftId)>=nftValue, "invalid nftValue");
         
-            uint reward = project.minMonthReward*nftValue;  
-            totalClaimableAmount += reward;  
-            if(reward>0){
-                emit ClaimReward(account, projectIndex, project.contractAddress, nftId, nftValue, reward);
+            totalClaimableNftValue += nftValue;  
+            if(nftValue>0){
+                emit ClaimReward(account, projectIndex, project.contractAddress, nftId, nftValue, nftValue);
             }
         }
         _burnBatch(nftContractAddress, account, nftIds, nftValues);
@@ -523,7 +524,7 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
             totalClaimableAmount += _claim(tbaAddress, nftContractAddress, tbaNftIds, tbaNftValues);
         }
         require(totalClaimableAmount>0, "Claimable amount is 0");
-
+        totalClaimableAmount = totalClaimableAmount * 10**IERC20(_paymentTokenAddress).decimals();
         IERC20(_paymentTokenAddress).transfer(msg.sender, totalClaimableAmount);  
     }
 
@@ -536,8 +537,9 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
         for(uint i=0; i < nftIds.length; ++i){
             if(nftIds[i]>months) continue;
             
-            totalClaimableAmount += project.minMonthReward*nftValues[i];  
+            totalClaimableAmount += nftValues[i];  
         }
+        totalClaimableAmount = totalClaimableAmount * 10**IERC20(_paymentTokenAddress).decimals();
     }
 
     function releaseEth(uint256 amount) external {
@@ -566,6 +568,16 @@ contract SolarDappV2 is Context, Ownable, IERC1155Receiver {
 
     function setERC1155BaseUri(string calldata uri) external onlyOwner{
         _erc1155BaseUri = uri;
+    }
+
+    function migrateUser(address[] calldata userList, address[] calldata tbaAddressList, uint256[] calldata tbaNftIdList) external onlyOwner{
+        address addr;
+        for(uint i=0;i<userList.length;++i){
+            addr = userList[i];
+            _userList.push(addr);
+            _userInfo[addr].tbaNftId = tbaNftIdList[i];
+            _userInfo[addr].tbaAddress = tbaAddressList[i];
+        }
     }
 
     function getUserCount() external view returns(uint256){
